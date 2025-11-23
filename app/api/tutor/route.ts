@@ -1,35 +1,60 @@
-import { generateText } from "ai"
+import Groq from "groq-sdk";
 
 export async function POST(req: Request) {
   try {
-    const { message, userId, topicId, weakTopics } = await req.json()
+    const { message, weakTopics } = await req.json();
 
     const weakTopicsContext =
       weakTopics && weakTopics.length > 0
-        ? `\n\nThe student is struggling with these topics: ${weakTopics
+        ? `The student is weaker in: ${weakTopics
             .map((t: any) => `${t.topic_code} - ${t.title}`)
-            .join(", ")}. Consider suggesting revision for these areas when relevant.`
-        : ""
+            .join(", ")}.`
+        : "";
 
-    const prompt = `You are an expert A-level tutor specializing in Edexcel Economics, Business, and Politics. Your role is to:
-- Explain concepts clearly and concisely
-- Provide examples and real-world applications
-- Identify knowledge gaps and suggest areas to focus on
-- Encourage and motivate students
-- Use the Edexcel specification terminology${weakTopicsContext}
+    const groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
 
-Student's question: ${message}
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "system",
+          content: `
+You are a helpful A-Level tutor for Edexcel Economics, Business and Politics.
+Your goal is to help students UNDERSTAND — not give full answers.
 
-Provide a helpful, encouraging response. Keep it concise (2-3 paragraphs max).`
+Teaching style:
+- Short, simple sentences.
+- 2–3 sentences max per response.
+- Explain the idea briefly.
+- Give an example when useful.
+- Ask one or two guiding questions.
+- Encourage the student.
+- Never reveal the full exam answer.
+- Use Edexcel terminology.
+${weakTopicsContext}
+`
+        },
+        {
+          role: "user",
+          content: `
+The student asked: "${message}"
 
-    const { text } = await generateText({
-      model: "openai/gpt-4o",
-      prompt,
-    })
+Give a short explanation and ask 1–2 helpful questions to guide them.
+Do NOT give the full answer.
+`
+        }
+      ],
+      temperature: 0.4,
+    });
 
-    return Response.json({ response: text })
+    const response = completion.choices[0].message?.content || "";
+
+    return Response.json({ response });
+
   } catch (error) {
-    console.error("[v0] Error in tutor:", error)
-    return Response.json({ error: "Failed to get response" }, { status: 500 })
+    console.error("[Tutor Error]", error);
+    return Response.json({ error: "Failed to get response" }, { status: 500 });
   }
 }
