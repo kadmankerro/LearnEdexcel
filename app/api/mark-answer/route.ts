@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     } = await req.json();
 
     // =====================================
-    // AI MARKING (ALWAYS — DEFAULT FOR ALL QUESTIONS)
+    // AI MARKING FOR ALL QUESTION TYPES
     // =====================================
 
     const groq = new Groq({
@@ -18,26 +18,29 @@ export async function POST(req: Request) {
     });
 
     const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",  // FREE + SUPPORTED
+      model: "llama-3.3-70b-versatile",
       messages: [
         {
           role: "system",
           content: `
 You are an Edexcel A-Level examiner. 
-Mark strictly using Edexcel assessment objectives:
+Mark answers using AO1, AO2, AO3 and AO4 —
+BUT always keep responses short and simple.
 
-AO1 — Knowledge & understanding  
-AO2 — Application  
-AO3 — Analysis  
-AO4 — Evaluation (where relevant)
+Rules for writing:
+- Each AO point = 1 short sentence.
+- Feedback = 1–2 short friendly sentences.
+- Never write long paragraphs.
+- Never be overly formal.
+- Always encourage the student.
+- Return ONLY the following format:
 
-Rules:
-- Follow the provided mark scheme EXACTLY.
-- Do NOT award marks outside the scheme.
-- Give a final mark out of ${maxMarks}.
-- Provide AO1/AO2/AO3/AO4 justification.
-- Be friendly, clear, and supportive for a 16–18 year old.
-- Highlight strengths AND how to improve.
+Final Mark: X/Y
+AO1: ...
+AO2: ...
+AO3: ...
+AO4: ...
+Feedback: ...
 `
         },
         {
@@ -54,17 +57,16 @@ ${markScheme}
 Student Answer:
 ${answer}
 
-Maximum Marks: ${maxMarks}
+Max Marks: ${maxMarks}
 
-Return your answer in this exact format:
+Return ONLY in this compact format:
 
-1. Final Mark: X/${maxMarks}
-2. AO Breakdown:
-   - AO1:
-   - AO2:
-   - AO3:
-   - AO4:
-3. Student Feedback (friendly and age-appropriate)
+Final Mark: X/${maxMarks}
+AO1: (short sentence)
+AO2: (short sentence)
+AO3: (short sentence or "Not needed")
+AO4: (short sentence or "Not needed")
+Feedback: (1–2 short sentences max)
 `
         }
       ],
@@ -75,17 +77,12 @@ Return your answer in this exact format:
 
     // =====================================
     // AUTO MARK EXTRACTION
-    // Supports formats like:
-    // "Final Mark: 6/12"
-    // "Score = 5 / 8"
-    // "Awarded 7 out of 10"
     // =====================================
 
-    const fractionRegex = /(\d{1,3})\s*\/\s*(\d{1,3})/;
-    const outOfRegex = /(\d{1,3})\s*out\s*of\s*(\d{1,3})/i;
+    const fractionRegex = /(\d+)\s*\/\s*(\d+)/;
+    const outOfRegex = /(\d+)\s*out\s*of\s*(\d+)/i;
 
     let extractedMark = 0;
-
     let match = feedback.match(fractionRegex);
     if (!match) match = feedback.match(outOfRegex);
 
