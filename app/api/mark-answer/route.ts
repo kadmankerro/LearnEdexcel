@@ -2,46 +2,15 @@ import Groq from "groq-sdk";
 
 export async function POST(req: Request) {
   try {
-    const { question, answer, markScheme, maxMarks, questionType, correctAnswer } =
-      await req.json();
+    const {
+      question,
+      answer,
+      markScheme,
+      maxMarks
+    } = await req.json();
 
     // =====================================
-    // 1. MULTIPLE CHOICE MARKING
-    // =====================================
-    if (questionType === "multiple_choice") {
-      const student = answer?.trim().toLowerCase();
-      const correct = correctAnswer?.trim().toLowerCase();
-      const isCorrect = student === correct;
-
-      return Response.json({
-        marks: isCorrect ? maxMarks : 0,
-        feedback: isCorrect
-          ? "Correct! Great job — you clearly understood this question."
-          : `Not quite. The correct answer is **${correctAnswer}**. Review this topic to understand why that option is correct.`,
-      });
-    }
-
-    // =====================================
-    // 2. CALCULATION MARKING
-    // =====================================
-    if (questionType === "calculation") {
-      const studentNum = Number.parseFloat(answer?.replace(/[^0-9.-]/g, "") || "0");
-      const correctNum = Number.parseFloat(correctAnswer?.replace(/[^0-9.-]/g, "") || "0");
-
-      const tolerance = Math.abs(correctNum * 0.01); // 1% tolerance
-      const isCorrect = Math.abs(studentNum - correctNum) <= tolerance;
-
-      return Response.json({
-        marks: isCorrect ? maxMarks : 0,
-        feedback: isCorrect
-          ? `Correct! Your answer of **${answer}** is within the acceptable range. Nice work.`
-          : `Your calculation doesn't seem correct. The accurate answer is **${correctAnswer}**. Try redoing the steps carefully.`,
-      });
-    }
-
-    // =====================================
-    // 3. AI MARKING (DEFAULT)
-    //    This runs if NOT MCQ or Calculation
+    // AI MARKING (ALWAYS — DEFAULT FOR ALL QUESTIONS)
     // =====================================
 
     const groq = new Groq({
@@ -49,7 +18,7 @@ export async function POST(req: Request) {
     });
 
     const completion = await groq.chat.completions.create({
-      model: "llama-3.1-70b-versatile",
+      model: "llama-3.1-70b-versatile",  // FREE + SUPPORTED
       messages: [
         {
           role: "system",
@@ -67,8 +36,8 @@ Rules:
 - Do NOT award marks outside the scheme.
 - Give a final mark out of ${maxMarks}.
 - Provide AO1/AO2/AO3/AO4 justification.
-- Be friendly, clear and supportive for a 16–18 year old student.
-- Highlight strengths AND improvements.
+- Be friendly, clear, and supportive for a 16–18 year old.
+- Highlight strengths AND how to improve.
 `
         },
         {
@@ -106,17 +75,13 @@ Return your answer in this exact format:
 
     // =====================================
     // AUTO MARK EXTRACTION
-    // Supports:
-    //  "Final Mark: 6/12"
-    //  "Awarded 7 / 10"
-    //  "I would give 5/8"
-    //  "Score: 9 of 15"
+    // Supports formats like:
+    // "Final Mark: 6/12"
+    // "Score = 5 / 8"
+    // "Awarded 7 out of 10"
     // =====================================
 
-    // Matches: 6/12, 7 / 10, 5 /8, etc.
     const fractionRegex = /(\d{1,3})\s*\/\s*(\d{1,3})/;
-
-    // Matches: "7 out of 12"
     const outOfRegex = /(\d{1,3})\s*out\s*of\s*(\d{1,3})/i;
 
     let extractedMark = 0;
