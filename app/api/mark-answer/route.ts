@@ -16,7 +16,7 @@ export async function POST(req: Request) {
         marks: isCorrect ? maxMarks : 0,
         feedback: isCorrect
           ? "Correct! Great job — you clearly understood this question."
-          : `Not quite. The correct answer is **${correctAnswer}**. Review this topic to understand why that option is correct.`,
+          : `Not quite. The correct answer is **${correctAnswer}**. Review this topic to understand why that option is right.`,
       });
     }
 
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       const studentNum = Number.parseFloat(answer?.replace(/[^0-9.-]/g, "") || "0");
       const correctNum = Number.parseFloat(correctAnswer?.replace(/[^0-9.-]/g, "") || "0");
 
-      const tolerance = Math.abs(correctNum * 0.01); // 1% tolerance
+      const tolerance = Math.abs(correctNum * 0.01);
       const isCorrect = Math.abs(studentNum - correctNum) <= tolerance;
 
       return Response.json({
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
       });
 
       const completion = await groq.chat.completions.create({
-        model: "llama3-70b-8192",   // FREE ultra-powerful model
+        model: "llama3-70b-8192",
         messages: [
           {
             role: "system",
@@ -64,10 +64,10 @@ Rules:
 - Follow the provided mark scheme EXACTLY.
 - Do not award marks outside the scheme.
 - Give a final mark out of ${maxMarks}.
-- Provide an AO1/AO2/AO3/AO4 breakdown.
-- Tone must be friendly, clear and suitable for a 16–18 year old.
-- Always encourage improvement.
-            `
+- Provide a clear AO1/AO2/AO3/AO4 breakdown.
+- Tone must be friendly, clear, and suitable for a 16–18 year old.
+- Encourage improvement.
+`
           },
           {
             role: "user",
@@ -92,18 +92,35 @@ Return your answer in this format:
    - AO1:
    - AO2:
    - AO3:
-   - AO4:
-3. Student Feedback (friendly, clear, age-appropriate)
-            `
+   - AO4: (if needed)
+3. Student Feedback (friendly and age-appropriate)
+`
           }
         ],
         temperature: 0.2
       });
 
-      const feedback = completion.choices[0].message?.content || "No response generated.";
+      const feedback = completion.choices[0].message?.content || "";
+
+      // ================================
+      // AUTO MARK EXTRACTION
+      // ================================
+      const markRegex = /(\b\d{1,3})\s*\/\s*(\d{1,3})/; 
+      const match = feedback.match(markRegex);
+
+      let extractedMark = 0;
+
+      if (match) {
+        const mark = parseInt(match[1], 10);
+        const total = parseInt(match[2], 10);
+
+        if (!isNaN(mark) && !isNaN(total) && total === maxMarks) {
+          extractedMark = Math.min(mark, maxMarks);
+        }
+      }
 
       return Response.json({
-        marks: maxMarks,   // We can enable auto-extraction if you want
+        marks: extractedMark,
         feedback
       });
     }
