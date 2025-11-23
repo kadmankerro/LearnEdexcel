@@ -1,4 +1,4 @@
-import OpenAI from "openai/index.mjs";
+import Groq from "groq-sdk";
 
 export async function POST(req: Request) {
   try {
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
         marks: isCorrect ? maxMarks : 0,
         feedback: isCorrect
           ? "Correct! Great job — you clearly understood this question."
-          : `Not quite. The correct answer is **${correctAnswer}**. Have another look at this topic to see why that option is right.`,
+          : `Not quite. The correct answer is **${correctAnswer}**. Review this topic to understand why that option is correct.`,
       });
     }
 
@@ -33,21 +33,21 @@ export async function POST(req: Request) {
       return Response.json({
         marks: isCorrect ? maxMarks : 0,
         feedback: isCorrect
-          ? `Correct! Your answer of **${answer}** is within the expected range. Nice calculation.`
-          : `Your calculation is a bit off. The correct answer is **${correctAnswer}**. Double-check the formula and try again.`,
+          ? `Correct! Your answer of **${answer}** is within the acceptable range. Nice work.`
+          : `Your calculation doesn't seem correct. The accurate answer is **${correctAnswer}**. Try redoing the steps carefully.`,
       });
     }
 
     // ================================
-    // 3. AI MARKING (Edexcel A-Level)
+    // 3. AI MARKING — LLAMA 3 (FREE)
     // ================================
     if (questionType === "ai") {
-      const client = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
+      const groq = new Groq({
+        apiKey: process.env.GROQ_API_KEY
       });
 
-      const aiReply = await client.chat.completions.create({
-        model: "gpt-4o-mini",
+      const completion = await groq.chat.completions.create({
+        model: "llama3-70b-8192",   // FREE ultra-powerful model
         messages: [
           {
             role: "system",
@@ -60,18 +60,19 @@ AO2 — Application
 AO3 — Analysis  
 AO4 — Evaluation (if required)
 
-Instructions:
-• Follow the mark scheme EXACTLY as provided.  
-• Do NOT invent criteria or add marks outside the scheme.  
-• Keep your tone supportive and clear for a 16–18 year old student.  
-• Justify every mark using AO1/AO2/AO3/AO4.  
-• Be concise, fair, and educational.  
-`,
+Rules:
+- Follow the provided mark scheme EXACTLY.
+- Do not award marks outside the scheme.
+- Give a final mark out of ${maxMarks}.
+- Provide an AO1/AO2/AO3/AO4 breakdown.
+- Tone must be friendly, clear and suitable for a 16–18 year old.
+- Always encourage improvement.
+            `
           },
           {
             role: "user",
             content: `
-Mark the following A-Level answer according to the Edexcel specification.
+Mark this A-Level answer using the Edexcel specification.
 
 Question:
 ${question}
@@ -84,45 +85,40 @@ ${answer}
 
 Maximum Marks: ${maxMarks}
 
-Please return your response in this format:
+Return your answer in this format:
 
-1. **Final Mark: X/${maxMarks}**
-2. **AO Breakdown**
+1. Final Mark: X/${maxMarks}
+2. AO Breakdown:
    - AO1:
    - AO2:
    - AO3:
-   - AO4: (if relevant)
-3. **Student Feedback**
-   - Friendly 16–18 year old tone
-   - Explain what they did well
-   - Explain how to improve
-`,
-          },
+   - AO4:
+3. Student Feedback (friendly, clear, age-appropriate)
+            `
+          }
         ],
+        temperature: 0.2
       });
 
-      const feedback = aiReply.choices[0].message.content || "No feedback generated.";
+      const feedback = completion.choices[0].message?.content || "No response generated.";
 
       return Response.json({
-        marks: maxMarks, // If you want auto-mark extraction, I can add that next.
-        feedback,
+        marks: maxMarks,   // We can enable auto-extraction if you want
+        feedback
       });
     }
 
-    // ================================
-    // If no valid questionType provided
-    // ================================
     return Response.json(
-      { error: "Invalid question type or missing parameters." },
+      { error: "Invalid question type." },
       { status: 400 }
     );
 
   } catch (err) {
-    console.error("[AI Marker Error]", err);
+    console.error("[Llama Marker Error]", err);
     return Response.json(
       {
         error: "Failed to mark answer.",
-        details: err instanceof Error ? err.message : "Unknown error",
+        details: err instanceof Error ? err.message : "Unknown error"
       },
       { status: 500 }
     );
