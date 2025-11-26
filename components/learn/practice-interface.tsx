@@ -8,17 +8,18 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   ArrowLeft,
   BookOpen,
-  Highlighter,
   Send,
   ChevronLeft,
   ChevronRight,
   CheckCircle,
   XCircle,
   AlertCircle,
+  FileText,
 } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { AiTutorSidebar } from "./ai-tutor-sidebar"
+import { NotesSidebar } from "./notes-sidebar"
 import { useRouter } from "next/navigation"
 
 interface Question {
@@ -76,7 +77,6 @@ export function PracticeInterface({
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all")
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answer, setAnswer] = useState("")
-  const [highlightedRanges, setHighlightedRanges] = useState<Array<{ start: number; end: number }>>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submittedAnswer, setSubmittedAnswer] = useState<{
     marks: number
@@ -84,10 +84,8 @@ export function PracticeInterface({
   } | null>(null)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [tutorOpen, setTutorOpen] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const questionTextRef = useRef<HTMLDivElement>(null)
-  const [questionHighlights, setQuestionHighlights] = useState<string[]>([])
-  const [isHighlightMode, setIsHighlightMode] = useState(false)
 
   const filteredQuestions =
     selectedDifficulty === "all" ? questions : questions.filter((q) => q.difficulty === selectedDifficulty)
@@ -99,31 +97,12 @@ export function PracticeInterface({
     const prevAnswer = previousAnswers.find((a) => a.question_id === currentQuestion?.id)
     if (prevAnswer) {
       setAnswer(prevAnswer.answer_text || "")
-      setQuestionHighlights(prevAnswer.highlighted_text || [])
     } else {
       setAnswer("")
-      setQuestionHighlights([])
     }
     setSubmittedAnswer(null)
     setSelectedOption(null)
-    setIsHighlightMode(false)
   }, [currentQuestionIndex, currentQuestion, previousAnswers])
-
-  const handleHighlightQuestion = () => {
-    const selection = window.getSelection()
-    if (selection && selection.toString().trim()) {
-      const selectedText = selection.toString().trim()
-      if (!questionHighlights.includes(selectedText)) {
-        setQuestionHighlights((prev) => [...prev, selectedText])
-      }
-      selection.removeAllRanges()
-      setIsHighlightMode(false)
-    }
-  }
-
-  const removeHighlight = (index: number) => {
-    setQuestionHighlights((prev) => prev.filter((_, i) => i !== index))
-  }
 
   const handleSubmit = async () => {
     if (!currentQuestion) return
@@ -158,7 +137,6 @@ export function PracticeInterface({
         user_id: userId,
         question_id: currentQuestion.id,
         answer_text: answerText,
-        highlighted_text: questionHighlights,
         marks_awarded: result.marks,
         ai_feedback: result.feedback,
       })
@@ -207,7 +185,7 @@ export function PracticeInterface({
         feedback: result.feedback,
       })
     } catch (error) {
-      console.error("[v0] Error submitting answer:", error)
+      console.error("Error submitting answer:", error)
     } finally {
       setIsSubmitting(false)
     }
@@ -251,7 +229,7 @@ export function PracticeInterface({
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <div className={`flex-1 transition-all ${tutorOpen ? "mr-96" : ""}`}>
+      <div className={`flex-1 transition-all ${tutorOpen || notesOpen ? "mr-96" : ""}`}>
         <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
           <div className="container mx-auto flex h-16 items-center justify-between px-4">
             <div className="flex items-center gap-4">
@@ -266,7 +244,25 @@ export function PracticeInterface({
               <Badge variant="outline" className="hidden sm:flex">
                 Question {currentQuestionIndex + 1} / {filteredQuestions.length}
               </Badge>
-              <Button variant="outline" size="sm" onClick={() => setTutorOpen(!tutorOpen)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setNotesOpen(!notesOpen)
+                  if (tutorOpen) setTutorOpen(false)
+                }}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Notes
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setTutorOpen(!tutorOpen)
+                  if (notesOpen) setNotesOpen(false)
+                }}
+              >
                 <BookOpen className="mr-2 h-4 w-4" />
                 AI Tutor
               </Button>
@@ -341,48 +337,15 @@ export function PracticeInterface({
                           </Badge>
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant={isHighlightMode ? "default" : "ghost"}
-                        onClick={() => {
-                          setIsHighlightMode(!isHighlightMode)
-                          if (!isHighlightMode) {
-                            handleHighlightQuestion()
-                          }
-                        }}
-                        title={isHighlightMode ? "Click after selecting text" : "Select text to highlight"}
-                      >
-                        <Highlighter className="h-4 w-4" />
-                      </Button>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4 pt-6">
                     <div
-                      ref={questionTextRef}
-                      className="prose prose-sm max-w-none select-text rounded-lg bg-gradient-to-br from-muted/30 to-muted/10 p-6 leading-relaxed"
+                      className="prose prose-sm max-w-none rounded-lg bg-gradient-to-br from-muted/30 to-muted/10 p-6 leading-relaxed"
                       style={{ fontSize: "15px", lineHeight: "1.8" }}
                     >
                       {currentQuestion.question_text}
                     </div>
-
-                    {questionHighlights.length > 0 && (
-                      <div className="space-y-2 rounded-lg border bg-yellow-50 p-4">
-                        <p className="text-sm font-semibold flex items-center gap-2">
-                          <Highlighter className="h-4 w-4" />
-                          Your Highlights:
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {questionHighlights.map((highlight, index) => (
-                            <Badge key={index} variant="secondary" className="gap-2 bg-yellow-200 hover:bg-yellow-300">
-                              <span className="max-w-[200px] truncate">{highlight}</span>
-                              <button onClick={() => removeHighlight(index)} className="hover:text-destructive">
-                                <XCircle className="h-3 w-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
 
                     {currentQuestion.question_type === "multiple_choice" && currentQuestion.question_options && (
                       <div className="space-y-3">
@@ -602,7 +565,17 @@ export function PracticeInterface({
         </main>
       </div>
 
-      {tutorOpen && <AiTutorSidebar userId={userId} topicId={topic.id} onClose={() => setTutorOpen(false)} />}
+      {notesOpen && (
+        <NotesSidebar userId={userId} topicId={topic.id} isOpen={notesOpen} onClose={() => setNotesOpen(false)} />
+      )}
+      {tutorOpen && (
+        <AiTutorSidebar
+          userId={userId}
+          topicId={topic.id}
+          topicTitle={topic.title}
+          onClose={() => setTutorOpen(false)}
+        />
+      )}
     </div>
   )
 }
