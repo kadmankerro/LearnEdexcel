@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { SubjectSelector } from "@/components/learn/subject-selector"
 
 export default async function LearnPage() {
   const supabase = await createClient()
@@ -13,12 +12,14 @@ export default async function LearnPage() {
     redirect("/auth/login")
   }
 
-  // Fetch subjects
-  const { data: subjects } = await supabase.from("subjects").select("*").order("name")
+  redirect("/dashboard")
 
-  return (
-    <div className="min-h-screen bg-background">
-      <SubjectSelector subjects={subjects || []} userId={user.id} />
-    </div>
-  )
+  // Fetch subjects
+  // const { data: subjects } = await supabase.from("subjects").select("*").order("name")
+
+  // return (
+  //   <div className="min-h-screen bg-background">
+  //     <SubjectSelector subjects={subjects || []} userId={user.id} />
+  //   </div>
+  // )
 }
